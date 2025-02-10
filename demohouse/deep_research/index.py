@@ -23,7 +23,7 @@ from arkitect.launcher.vefaas import bot_wrapper
 from arkitect.telemetry.trace import task
 from search_engine.tavily import TavilySearchEngine
 from search_engine.volc_bot import VolcBotSearchEngine
-from deep_search import DeepSearch
+from deep_research import DeepResearch
 
 from utils import get_last_message
 
@@ -44,16 +44,17 @@ async def main(
 ) -> AsyncIterable[Union[ArkChatCompletionChunk, ArkChatResponse]]:
     # using last_user_message as query
     last_user_message = get_last_message(request.messages, "user")
-    deep_search = DeepSearch(
-        search_engine=VolcBotSearchEngine(bot_id=SEARCH_BOT_ID, api_key=ARK_API_KEY),
+    deep_research = DeepResearch(
+        # search_engine=VolcBotSearchEngine(bot_id=SEARCH_BOT_ID, api_key=ARK_API_KEY),
+        search_engine=TavilySearchEngine(api_key=TAVILY_API_KEY),
         endpoint_id=REASONING_EP_ID,
     )
 
     if request.stream:
-        async for c in deep_search.stream_search_and_summary(request=request, query=last_user_message.content):
+        async for c in deep_research.astream_deep_research(request=request, question=last_user_message.content):
             yield c
     else:
-        rsp = await deep_search.search_and_summary(request=request, query=last_user_message.content)
+        rsp = await deep_research.arun_deep_research(request=request, question=last_user_message.content)
         yield rsp
 
 
@@ -72,7 +73,7 @@ if __name__ == "__main__":
         package_path="index",
         port=int(port) if port else 8888,
         health_check_path="/v1/ping",
-        endpoint_path="/api/v3/bots/chat/completions",
+        endpoint_path="/api/v3/chat/completions",
         trace_on=False,
         clients={},
     )

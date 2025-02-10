@@ -44,15 +44,16 @@ class TavilySearchEngine(SearchEngine, ABC):
         )
 
     async def asearch(self, query: str) -> SearchResult:
-        response = await asyncio.to_thread(self._tavily_client.search,
-                                           query=query,
-                                           search_depth=self._search_depth,
-                                           topic=self._topic,
-                                           days=self._days,
-                                           max_results=self._max_results,
-                                           include_domains=self._include_domains,
-                                           exclude_domains=self._exclude_domains
-                                           )
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(None, lambda: self._tavily_client.search(
+            query=query,
+            search_depth=self._search_depth,
+            topic=self._topic,
+            days=self._days,
+            max_results=self._max_results,
+            include_domains=self._include_domains,
+            exclude_domains=self._exclude_domains
+        ))
         return SearchResult(
             raw_content=self._format_result(response)
         )
