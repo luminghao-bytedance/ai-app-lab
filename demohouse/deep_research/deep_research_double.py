@@ -160,7 +160,7 @@ class DeepResearch(BaseModel):
             planned_rounds += 1
 
             llm = BaseChatLanguageModel(
-                endpoint_id=self.doubao_endpoint_id,
+                endpoint_id=self.deepseek_r1_endpoint_id,
                 template=CustomPromptTemplate(template=self.intention_template),
                 messages=request.messages,
             )
@@ -171,41 +171,41 @@ class DeepResearch(BaseModel):
                 meta_info=f"当前时间：{get_current_date()}",
             )
 
-            intention_result = ""
+            cot_result = ""
 
             async for chunk in stream:
                 if chunk.choices[0].delta.reasoning_content:
                     yield chunk
                 elif chunk.choices[0].delta.content:
-                    intention_result += chunk.choices[0].delta.content
+                    cot_result += chunk.choices[0].delta.content
                     # cast the content into reasoning content
                     yield cast_content_to_reasoning_content(chunk)
 
-            if "否" in intention_result:
+            # rewrite query
+            llm = BaseChatLanguageModel(
+                endpoint_id=self.doubao_endpoint_id,
+                template=CustomPromptTemplate(template=self.query_rewrite_template),
+                messages=request.messages,
+            )
+            query_result = ""
+            stream = llm.astream(
+                reference=references.to_plaintext(),  # pass the search result to prompt template
+                question=question,
+                cot=cot_result,
+                meta_info=f"当前时间：{get_current_date()}",
+            )
+            async for chunk in stream:
+                if chunk.choices[0].delta.reasoning_content:
+                    yield chunk
+                elif chunk.choices[0].delta.content:
+                    query_result += chunk.choices[0].delta.content
+                    # cast the content into reasoning content
+                    yield cast_content_to_reasoning_content(chunk)
+
+            if "无需搜索" in query_result:
                 INFO("intention finished")
                 break
             else:
-                INFO("I still need to search")
-                # rewrite query
-                llm = BaseChatLanguageModel(
-                    endpoint_id=self.deepseek_r1_endpoint_id,
-                    template=CustomPromptTemplate(template=self.query_rewrite_template),
-                    messages=request.messages,
-                )
-                query_result = ""
-                stream = llm.astream(
-                    reference=references.to_plaintext(),  # pass the search result to prompt template
-                    question=question,
-                    meta_info=f"当前时间：{get_current_date()}",
-                )
-                async for chunk in stream:
-                    if chunk.choices[0].delta.reasoning_content:
-                        yield chunk
-                    elif chunk.choices[0].delta.content:
-                        query_result += chunk.choices[0].delta.content
-                        # cast the content into reasoning content
-                        yield cast_content_to_reasoning_content(chunk)
-
                 INFO(f"searching: {query_result}")
                 keywords = query_result.split("|")
                 content = ""
@@ -266,10 +266,10 @@ async def main():
     dr = DeepResearch(
         search_engine=VolcBotSearchEngine(
             bot_id="bot-20250209103828-hcr48",
-            api_key="your key",
+            api_key="yourkey",
         ),
-        deepseek_r1_endpoint_id="your ep id",
-        doubao_endpoint_id="your ep id",
+        deepseek_r1_endpoint_id="deepseek-ep",
+        doubao_endpoint_id="doubao-ep",
     )
 
     thinking = False
