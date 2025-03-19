@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import datetime
 import logging
 from contextlib import AsyncExitStack
@@ -31,7 +32,24 @@ logger = logging.getLogger(__name__)
 
 
 class MCPClient:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        command: str | None = None,
+        arguments: list[str] | None = None,
+        server_url: str | None = None,
+        env: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: float = 5,
+        sse_read_timeout: float = 60 * 5,
+    ) -> None:
+        self.command = command
+        self.arguments = arguments
+        self.server_url = server_url
+        self.env = env
+        self.headers = headers
+        self.timeout: float = timeout
+        self.sse_read_timeout = sse_read_timeout
+
         # Initialize session and client objects
         self.session: ClientSession = None  # type: ignore
         self.exit_stack = AsyncExitStack()
@@ -41,43 +59,32 @@ class MCPClient:
 
     async def connect_to_server(
         self,
-        server_url: str | None = None,
-        server_script_path: str | None = None,
-        env: dict[str, str] | None = None,
-        headers: dict[str, str] | None = None,
-        timeout: float = 5,
-        sse_read_timeout: float = 60 * 5,
     ) -> None:
         """Connect to an MCP server running with SSE or STDIO transport"""
         # Store the context managers so they stay alive
-        if server_url is not None and server_script_path is not None:
-            raise ValueError("You should set either erver_url or server_script_path")
-        if server_url is not None:
-            await self._connect_to_sse_server(
-                server_url, headers, timeout, sse_read_timeout
-            )
-        elif server_script_path is not None:
-            await self._connect_to_stdio_server(
-                server_script_path=server_script_path, env=env
-            )
+        if self.command is not None and self.server_url is not None:
+            raise ValueError("You should set either command or server_url")
+        if self.server_url is not None:
+            await self._connect_to_sse_server()
+        elif self.command is not None:
+            await self._connect_to_stdio_server()
         else:
-            raise ValueError("You should set either erver_url or server_script_path")
+            raise ValueError("You should set either command or server_url")
+        # Initialize
+        await self._init()
 
-    async def _connect_to_stdio_server(
-        self, server_script_path: str, env: dict[str, str] | None = None
-    ) -> None:
-        """Connect to an MCP server
-        Args:
-            server_script_path: Path to the server script (.py or .js)
-        """
-        is_python = server_script_path.endswith(".py")
-        is_js = server_script_path.endswith(".js")
-        if not (is_python or is_js):
-            raise ValueError("Server script must be a .py or .js file")
+    async def _connect_to_stdio_server(self) -> None:
+        """Connect to an MCP server"""
+        is_python = (
+            self.command == "uvx" or self.command == "python" or self.command == "uv"
+        )
+        is_js = self.command == "npx"
+        is_docker = self.command == "docker"
+        if not (is_python or is_js or is_docker):
+            raise ValueError("Command must be started by uvx, docker or npm.")
 
-        command = "python" if is_python else "node"
         server_params = StdioServerParameters(
-            command=command, args=[server_script_path], env=env
+            command=self.command, args=self.arguments, env=self.env
         )
 
         stdio_transport = await self.exit_stack.enter_async_context(
@@ -92,33 +99,23 @@ class MCPClient:
             )
         )
 
-        # Initialize
-        await self._init()
-
     async def _connect_to_sse_server(
         self,
-        server_url: str,
-        headers: dict[str, str] | None = None,
-        timeout: float = 5,
-        sse_read_timeout: float = 60 * 5,
     ) -> None:
         """Connect to an MCP server running with SSE transport"""
         # Store the context managers so they stay alive
         streams = await self.exit_stack.enter_async_context(
             sse_client(
-                url=server_url,
-                headers=headers,
-                timeout=timeout,
-                sse_read_timeout=sse_read_timeout,
+                url=self.server_url,
+                headers=self.headers,
+                timeout=self.timeout,
+                sse_read_timeout=self.sse_read_timeout,
             )
         )
 
         self.session = await self.exit_stack.enter_async_context(
             ClientSession(*streams)
         )
-
-        # Initialize
-        await self._init()
 
     async def _init(self) -> None:
         # Initialize
