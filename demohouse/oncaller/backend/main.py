@@ -1,7 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # Licensed under the 【火山方舟】原型应用软件自用许可协议
 # you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at 
+# You may obtain a copy of the License at
 #     https://www.volcengine.com/docs/82379/1433703
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,22 +15,12 @@ from typing import AsyncIterable
 from agent.supervisor import SupervisorAgent, switch_agent
 from agent.worker import WorkerAgent
 
-# from telemetry.byted.setup import setup_tracing
+from telemetry.byted.setup import setup_tracing
 from team.team import Team
 from arkitect.core.component.tool.builder import build_mcp_clients_from_config
 from arkitect.launcher.local.serve import launch_serve
 from arkitect.telemetry.trace import task
 from arkitect.types.llm.model import ArkChatRequest, ArkChatResponse
-
-VLM_PROMPT = """
-# 角色
-你是总结描述图片的专家，详细描述图片中物品的名称、颜色、位置关系、拍摄地点以及各类属性等信息。
-
-## 技能
-### 技能 1: 总结图片内容
-1. 当用户提供一张图片时，仔细观察图片中的各个元素。
-2. 总结图片中包含的物品名称、颜色、位置关系等信息，确保总结全面准确。
-"""
 
 
 MODELS = {
@@ -83,7 +73,7 @@ async def main(request: ArkChatRequest) -> AsyncIterable[ArkChatResponse]:
 
 if __name__ == "__main__":
     port = os.getenv("_BYTEFAAS_RUNTIME_PORT")
-    # setup_tracing()
+    setup_tracing()
     launch_serve(
         package_path="main",
         clients={},
