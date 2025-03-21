@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 class MCPClient:
     def __init__(
         self,
+        name: str,
         command: str | None = None,
         arguments: list[str] | None = None,
         server_url: str | None = None,
@@ -54,13 +55,16 @@ class MCPClient:
         self.session: ClientSession = None  # type: ignore
         self.exit_stack = AsyncExitStack()
         self.tools: Dict[str, Tool] = {}
-        self._mcp_server_name: str | None = None
+        self._mcp_server_name: str = name
         self._chat_completion_tools: dict[str, ChatCompletionTool] = {}
 
     async def connect_to_server(
         self,
     ) -> None:
         """Connect to an MCP server running with SSE or STDIO transport"""
+        if self.session is not None:
+            logger.warning("MCP client is already connected to server")
+            return
         # Store the context managers so they stay alive
         if self.command is not None and self.server_url is not None:
             raise ValueError("You should set either command or server_url")
@@ -139,12 +143,18 @@ class MCPClient:
         await self.exit_stack.aclose()
 
     async def list_mcp_tools(self, use_cache: bool = True) -> list[Tool]:
+        if self.session is None:
+            logger.warning("MCP client is not connected to server yet. Connecting...")
+            await self.connect_to_server()
         if not use_cache:
             response = await self.session.list_tools()
             self.tools = {t.name: t for t in response.tools}
         return list(self.tools.values())
 
     async def list_tools(self, use_cache: bool = True) -> list[ChatCompletionTool]:
+        if self.session is None:
+            logger.warning("MCP client is not connected to server yet. Connecting...")
+            await self.connect_to_server()
         if not use_cache:
             response = await self.session.list_tools()
             self.tools = {t.name: t for t in response.tools}
@@ -155,8 +165,6 @@ class MCPClient:
 
     @property
     def name(self) -> str:
-        if self._mcp_server_name is None:
-            raise ValueError("MCP client is not connected to server yet")
         return self._mcp_server_name
 
     async def execute_tool(
@@ -164,10 +172,16 @@ class MCPClient:
         tool_name: str,
         parameters: dict[str, Any],
     ) -> str | list[ChatCompletionContentPartParam]:
+        if self.session is None:
+            logger.warning("MCP client is not connected to server yet. Connecting...")
+            await self.connect_to_server()
         result = await self.session.call_tool(tool_name, parameters)
         return convert_to_chat_completion_content_part_param(result)
 
     async def get_tool(self, tool_name: str, use_cache: bool = True) -> Tool | None:
+        if self.session is None:
+            logger.warning("MCP client is not connected to server yet. Connecting...")
+            await self.connect_to_server()
         if not use_cache:
             response = await self.session.list_tools()
             self.tools = {t.name: t for t in response.tools}
