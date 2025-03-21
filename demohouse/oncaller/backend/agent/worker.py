@@ -11,75 +11,55 @@
 
 from typing import Any, AsyncIterable, Optional
 
-from agent.agent import Agent, AgentStepChunk
+from agent.agent import Agent, SwitchAgent
 from jinja2 import Template
-from models.messages import OutputTextChunk, ReasoningChunk
-from models.planning import Planning, PlanningItem
 from prompt.worker import DEFAULT_WORKER_PROMPT
-from pydantic import BaseModel, Field
 from volcenginesdkarkruntime.types.chat import ChatCompletionChunk
 
-from arkitect.core.component.context.context import Context
-from arkitect.core.component.context.hooks import PostToolCallHook
-from arkitect.core.component.context.model import State
-
-
-class PlanningRecordHook(BaseModel, PostToolCallHook):
-    planning_item: PlanningItem = Field(default_factory=PlanningItem)
-
-    async def post_tool_call(
-        self,
-        name: str,
-        arguments: str,
-        response: Any,
-        exception: Optional[Exception],
-        state: State,
-    ) -> State:
-        self.planning_item.process_records.append(
-            f"执行工具调用{'成功' if not exception else '失败'}：{name} 参数：{arguments} 结果：{response or exception}"
-        )
-        return state
+from arkitect.core.component.context.model import ContextInterruption, State
 
 
 class WorkerAgent(Agent):
-    planning: Planning = Field(default_factory=Planning)
-    planning_item: PlanningItem = Field(default_factory=PlanningItem)
     state: Optional[State] = None
     system_prompt: str = DEFAULT_WORKER_PROMPT
 
-    async def astream_step(self, **kwargs) -> AsyncIterable[AgentStepChunk]:
-        ctx = Context(
+    async def astream_step(
+        self, **kwargs
+    ) -> ContextInterruption | AsyncIterable[ChatCompletionChunk | ContextInterruption]:
+        # ctx = Context(
+        #     model=self.model,
+        #     tools=self.tools,
+        #     state=self.state,
+        # )
+        # await ctx.init()
+        yield ChatCompletionChunk(
+            id="1",
+            service_tier="default",
+            choices=[
+                {
+                    "index": 0,
+                    "delta": {
+                        "role": "assistant",
+                        "content": "I have no idea",
+                        "reasoning_content": "",
+                    },
+                    "stop_reason": "stop",
+                }
+            ],
+            created=123,
             model=self.model,
-            tools=self.tools,
-            state=self.state,
-        )
-        await ctx.init()
-        ctx.add_post_tool_call_hook(
-            PlanningRecordHook(planning_item=self.planning_item)
+            object="chat.completion.chunk",
         )
 
-        rsp_stream = await ctx.completions.create(
-            messages=[
-                {"role": "system", "content": self.generate_system_prompt()},
-            ]
+        yield ContextInterruption(
+            life_cycle="tool_call",
+            reason="switch agent",
+            state=None,
+            details=SwitchAgent(
+                agent_name="supervisor",
+                message="I have no idea. Please check with someone else.",
+            ),
         )
-
-        async for chunk in rsp_stream:
-            if (
-                isinstance(chunk, ChatCompletionChunk)
-                and chunk.choices[0].delta.content
-            ):
-                yield OutputTextChunk(delta=chunk.choices[0].delta.content)
-            if (
-                isinstance(chunk, ChatCompletionChunk)
-                and chunk.choices[0].delta.reasoning_content
-            ):
-                yield ReasoningChunk(delta=chunk.choices[0].delta.reasoning_content)
-
-        # after all we tidy the final result
-        last_message = ctx.get_latest_message()
-        if last_message:
-            self.planning_item.result_summary = last_message.get("content")
 
     def generate_system_prompt(self) -> str:
         return Template(self.system_prompt).render(
@@ -89,9 +69,6 @@ class WorkerAgent(Agent):
             task_id=str(self.planning_item.id),
             task_description=self.planning_item.description,
         )
-
-    def get_result(self) -> PlanningItem:
-        return self.planning_item
 
 
 if __name__ == "__main__":

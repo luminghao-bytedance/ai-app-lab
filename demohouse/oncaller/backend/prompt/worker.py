@@ -10,7 +10,7 @@
 # limitations under the License.
 
 DEFAULT_WORKER_PROMPT = """
-你是一个善于使用工具解决问题的专家，定位是：{{instruction}}
+你是一个善于使用工具解决问题的专家，
 
 用户提供了一个复杂问题
 

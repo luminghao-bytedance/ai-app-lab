@@ -11,16 +11,12 @@
 
 import abc
 from typing import AsyncIterable, Callable, List, Union
-from pydantic import Field, BaseModel
-
-from models.messages import MessageChunk
-from models.tool_events import ToolCallEvent, ToolCompletedEvent
-from arkitect.core.component.context.context import Context
 from pydantic import BaseModel
+from volcenginesdkarkruntime.types.chat import ChatCompletionChunk
 
+
+from arkitect.core.component.context.model import ContextInterruption
 from arkitect.core.component.tool import MCPClient
-
-AgentStepChunk = MessageChunk | ToolCallEvent | ToolCompletedEvent
 
 """
 Agent is the core interface for all runnable agents
@@ -40,5 +36,12 @@ class Agent(abc.ABC, BaseModel):
 
     # stream run step
     @abc.abstractmethod
-    async def astream_step(self, **kwargs) -> AsyncIterable[AgentStepChunk]:
+    async def astream_step(
+        self, **kwargs
+    ) -> AsyncIterable[ChatCompletionChunk | ContextInterruption]:
         pass
+
+
+class SwitchAgent(BaseModel):
+    agent_name: str
+    message: str

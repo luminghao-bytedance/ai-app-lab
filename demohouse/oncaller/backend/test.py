@@ -11,8 +11,6 @@
 
 from typing import Any
 
-from models.messages import OutputTextChunk, ReasoningChunk
-
 from arkitect.core.component.context.context import Context
 from arkitect.core.component.context.hooks import (
     HookInterruptException,
@@ -40,10 +38,7 @@ class PostToolCallHookInterrupHook(PostToolCallHook):
         state: State,
     ) -> State:
         print(state.messages)
-        raise HookInterruptException(
-            reason="post tool call interrupt",
-            state=state,
-        )
+        return state
 
 
 class PreLLMCallHookInterrupHook(PreLLMCallHook):
@@ -76,14 +71,7 @@ async def main():
         ],
     )
     async for chunk in resp:
-        if isinstance(chunk, ReasoningChunk):
-            print(chunk.reasoning_content)
-        elif isinstance(chunk, OutputTextChunk):
-            print(chunk.content)
-        elif isinstance(chunk, ContextInterruption):
-            state = chunk.state
-            print(state)
-            print(chunk.reason)
+        print(chunk)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@
 import os
 from typing import AsyncIterable
 
-from agent.supervisor import SupervisorAgent, route_agents
+from agent.supervisor import SupervisorAgent, switch_agent
 from agent.worker import WorkerAgent
 
 # from telemetry.byted.setup import setup_tracing
@@ -50,7 +50,7 @@ clients = build_mcp_clients_from_config(
 @task(distributed=False)
 async def main(request: ArkChatRequest) -> AsyncIterable[ArkChatResponse]:
     supervisor = SupervisorAgent(
-        model=MODELS["reasoning"], toos=[route_agents], name="supervisor"
+        model=MODELS["default"], tools=[switch_agent], name="supervisor"
     )
     apig_worker = WorkerAgent(
         model=MODELS["reasoning"], tools=[clients["apig_logs"]], name="apig_worker"

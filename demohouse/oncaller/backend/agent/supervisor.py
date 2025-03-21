@@ -10,16 +10,15 @@
 # limitations under the License.
 
 import json
-from typing import AsyncIterable, Optional
+from typing import AsyncIterable
+from pydantic import BaseModel, Field
 
-from agent.agent import Agent
+from agent.agent import Agent, SwitchAgent
 from jinja2 import Template
 from arkitect.core.component.context.hooks import (
     HookInterruptException,
     PreToolCallHook,
 )
-from models.messages import OutputTextChunk, ReasoningChunk
-from models.planning import Planning, PlanningItem
 from prompt.worker import DEFAULT_WORKER_PROMPT
 from volcenginesdkarkruntime.types.chat import ChatCompletionChunk
 
@@ -27,25 +26,35 @@ from arkitect.core.component.context.context import Context
 from arkitect.core.component.context.model import ContextInterruption, State
 
 
+class SwitchAgent(BaseModel):
+    agent_name: str
+    message: str
+
+
 class SwitchAgentInterrupHook(PreToolCallHook):
     async def pre_tool_call(self, name: str, arguments: str, state: State) -> State:
         if name == "switch_agent":
+            params = json.loads(arguments)
             raise HookInterruptException(
                 reason="switch agent",
                 state=state,
+                details=SwitchAgent(
+                    agent_name=params.get("agent_name"),
+                    message=params.get("message"),
+                ),
             )
         return state
 
 
 def switch_agent(agent_name: str, message: str) -> tuple[str, str]:
-    """You need to pass the task to the agent to do their job.
+    """如果你需要查询某个组件的问题时，你可以用这个方法将任务分给某一个agent。比如APIG 的任务可以分给apig_worker
 
     Args:
-        agent_name (str): the name of the next agent. You can choose from:
+        agent_name (str): 你想要将任务分配给哪个agent，你可以选择如下一些
             [apig_worker, tool_server_worker, proxy_worker, xllm_worker]
-        message (str): You need to pass down the context of the task and what you want them to do and what to report back to you.
-            For example:
-                - There is a problem with request ABCDE. Please find out if there is any noticable error in your service.
+        message (str): 你希望agent做什么，你可以描述的更详细一些。
+            举例：
+                - 请求ID ABCDE 有报错500，请你查看下APIG的日志"。
     """
     return agent_name, message
 
@@ -56,26 +65,46 @@ class SupervisorState(State):
 
 
 class SupervisorAgent(Agent):
-    state: Optional[SupervisorState] = None
+    state: SupervisorState = Field(default_factory=SupervisorState)
     system_prompt: str = DEFAULT_WORKER_PROMPT
 
     async def astream_step(
         self,
         message: str | None = None,
         **kwargs,
-    ) -> AsyncIterable[ChatCompletionChunk]:
+    ) -> AsyncIterable[ChatCompletionChunk | ContextInterruption]:
         ctx = Context(
             model=self.model,
             tools=self.tools,
             state=self.state,
         )
         await ctx.init()
+        ctx.add_pre_tool_call_hook(SwitchAgentInterrupHook())
+        messages = self.generate_message(message=message)
+
+        if self.state.round > self.state.max_round:
+            resp_stream = self.force_summary()
+        else:
+            assert len(messages)
+            resp_stream = await ctx.completions.create(messages=messages)
+        self.state.round += 1
+
+        async for chunk in resp_stream:
+            if isinstance(chunk, ChatCompletionChunk):
+                yield chunk
+            elif isinstance(chunk, ContextInterruption):
+                yield chunk
+                return
+
+    def generate_message(self, message: str | None) -> list:
         messages = []
         if self.state.round == 0:
             messages.append(
                 {
                     "role": "system",
-                    "content": self.generate_system_prompt(),
+                    "content": Template(self.system_prompt).render(
+                        complex_task=self.instruction,
+                    ),
                 }
             )
         if message is not None:
@@ -85,63 +114,25 @@ class SupervisorAgent(Agent):
                     "content": message,
                 }
             )
-
-        if self.state.round > self.state.max_round:
-            resp_stream = self.force_summary()
-        else:
-            assert message is not None
-            resp_stream = ctx.completions.create(messages=messages)
-        self.state.round += 1
-
-        async for chunk in resp_stream:
-            if isinstance(chunk, ChatCompletionChunk):
-                yield chunk
-            elif isinstance(chunk, ContextInterruption):
-                return chunk
-
-    def generate_system_prompt(self) -> str:
-        return Template(self.system_prompt).render(
-            instruction=self.instruction,
-            complex_task=self.planning.root_task,
-        )
+        return messages
 
 
 if __name__ == "__main__":
 
-    def add(a: int, b: int) -> int:
-        """Add two numbers
-
-        Args:
-            a (int): first number
-            b (int): second number
-
-        Returns:
-            int: sum of a and b
-        """
-        return a + b
-
     async def main() -> None:
 
-        planning_item = PlanningItem(
-            id="1",
-            description="计算 1 + 19",
-        )
-
-        agent = WorkerAgent(
+        agent = SupervisorAgent(
             llm_model="deepseek-r1-250120",
-            instruction="数据计算专家，会做两位数的加法",
-            tools=[add],
-            planning=Planning(root_task="计算给定的题目", items={"1": planning_item}),
-            planning_item=planning_item,
+            instruction="requst ID XXXXX 有问题，你查一下APIG 日志，看看哪里有问题",
+            tools=[switch_agent],
         )
+        stream = await agent.astream_step()
 
-        async for chunk in agent.astream_step():
-            if isinstance(chunk, OutputTextChunk):
-                print(chunk.delta, end="")
-            if isinstance(chunk, ReasoningChunk):
-                print(chunk.delta, end="")
-
-        print(agent.get_result())
+        async for chunk in stream:
+            if isinstance(chunk, ChatCompletionChunk):
+                print(chunk.choices[0].delta.content, end="")
+            elif isinstance(chunk, ContextInterruption):
+                print(chunk.reason, chunk.details)
 
     import asyncio
 
