@@ -19,11 +19,10 @@ from arkitect.core.component.context.hooks import (
     HookInterruptException,
     PreToolCallHook,
 )
-from prompt.worker import DEFAULT_WORKER_PROMPT
-from volcenginesdkarkruntime.types.chat import ChatCompletionChunk
-
 from arkitect.core.component.context.context import Context
 from arkitect.core.component.context.model import ContextInterruption, State
+from prompt.worker import DEFAULT_WORKER_PROMPT
+from volcenginesdkarkruntime.types.chat import ChatCompletionChunk
 
 
 class SwitchAgent(BaseModel):

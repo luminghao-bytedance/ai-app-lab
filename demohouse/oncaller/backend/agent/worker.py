@@ -9,7 +9,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, AsyncIterable, Optional
+from typing import AsyncIterable, Optional
 
 from agent.agent import Agent, SwitchAgent
 from jinja2 import Template
