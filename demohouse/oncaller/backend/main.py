@@ -1,0 +1,83 @@
+import os
+from typing import AsyncIterable
+
+from agent.supervisor import SupervisorAgent, route_agents
+from agent.worker import WorkerAgent
+
+# from telemetry.byted.setup import setup_tracing
+from team.team import Team
+from arkitect.core.component.tool.builder import build_mcp_clients_from_config
+from arkitect.launcher.local.serve import launch_serve
+from arkitect.telemetry.trace import task
+from arkitect.types.llm.model import ArkChatRequest, ArkChatResponse
+
+VLM_PROMPT = """
+# 角色
+你是总结描述图片的专家，详细描述图片中物品的名称、颜色、位置关系、拍摄地点以及各类属性等信息。
+
+## 技能
+### 技能 1: 总结图片内容
+1. 当用户提供一张图片时，仔细观察图片中的各个元素。
+2. 总结图片中包含的物品名称、颜色、位置关系等信息，确保总结全面准确。
+"""
+
+
+MODELS = {
+    "default": "doubao-1-5-pro-32k-250115",
+    "reasoning": "deepseek-r1-250120",
+    "vision": "doubao-1-5-vision-pro-32k-250115",
+}
+# your endpoint api key
+api_key = os.getenv("endpoint_api_key")
+
+
+clients = build_mcp_clients_from_config(
+    "/Users/bytedance/Documents/deepresearch/ai-app-lab/demohouse/oncaller/backend/mcp_config.json"
+)
+
+
+@task(distributed=False)
+async def main(request: ArkChatRequest) -> AsyncIterable[ArkChatResponse]:
+    supervisor = SupervisorAgent(
+        model=MODELS["reasoning"], toos=[route_agents], name="supervisor"
+    )
+    apig_worker = WorkerAgent(
+        model=MODELS["reasoning"], tools=[clients["apig_logs"]], name="apig_worker"
+    )
+    tool_server_worker = WorkerAgent(
+        model=MODELS["reasoning"],
+        tools=[clients["tool_server_logs"]],
+        name="tool_server_worker",
+    )
+    proxy_worker = WorkerAgent(
+        model=MODELS["reasoning"], tools=[clients["proxy_logs"]], name="proxy_worker"
+    )
+    xllm_worker = WorkerAgent(
+        model=MODELS["reasoning"], tools=[clients["xllm_logs"]], name="xllm_worker"
+    )
+
+    team = Team(
+        agents=[
+            supervisor,
+            apig_worker,
+            tool_server_worker,
+            proxy_worker,
+            xllm_worker,
+        ],
+        current_agent=supervisor,
+    )
+    async for resp in team.loop(request.messages[0].content):
+        yield resp
+
+
+if __name__ == "__main__":
+    port = os.getenv("_BYTEFAAS_RUNTIME_PORT")
+    # setup_tracing()
+    launch_serve(
+        package_path="main",
+        clients={},
+        port=int(port) if port else 10888,
+        host=None,
+        health_check_path="/v1/ping",
+        endpoint_path="/api/v3/bots/chat/completions",
+    )

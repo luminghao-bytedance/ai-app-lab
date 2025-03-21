@@ -50,3 +50,4 @@ __pycache__/
 .cloudide/
 
 dist/*.whl
+demohouse/oncaller/backend/*.json
