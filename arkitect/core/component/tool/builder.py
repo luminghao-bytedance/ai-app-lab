@@ -29,6 +29,6 @@ def build_mcp_clients_from_config(config_file: str) -> dict[str, MCPClient]:
     for server_name in mcp_servers_config:
         command = mcp_servers_config[server_name].get("command", "")
         args = mcp_servers_config[server_name].get("args", [])
-        client = MCPClient(command=command, arguments=args)
+        client = MCPClient(name=server_name, command=command, arguments=args)
         mcp_clients[server_name] = client
     return mcp_clients
