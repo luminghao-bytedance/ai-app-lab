@@ -21,7 +21,7 @@ from arkitect.core.component.context.hooks import (
 )
 from arkitect.core.component.context.context import Context
 from arkitect.core.component.context.model import ContextInterruption, State
-from prompt.worker import DEFAULT_WORKER_PROMPT
+from demohouse.oncaller.backend.prompt.prompt import DEFAULT_SUPERVISOR_PROMPT
 from volcenginesdkarkruntime.types.chat import ChatCompletionChunk
 
 
@@ -65,7 +65,7 @@ class SupervisorState(State):
 
 class SupervisorAgent(Agent):
     state: SupervisorState = Field(default_factory=SupervisorState)
-    system_prompt: str = DEFAULT_WORKER_PROMPT
+    system_prompt: str = DEFAULT_SUPERVISOR_PROMPT
 
     async def astream_step(
         self,

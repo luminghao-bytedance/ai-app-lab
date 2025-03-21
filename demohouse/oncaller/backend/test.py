@@ -50,7 +50,7 @@ class PreLLMCallHookInterrupHook(PreLLMCallHook):
 
 async def main():
     clients = build_mcp_clients_from_config(
-        "/Users/bytedance/Documents/deepresearch/ai-app-lab/demohouse/deep_research_agent/backend/mcp_config.json"
+        "/Users/bytedance/Documents/deepresearch/ai-app-lab/demohouse/oncaller/backend/mcp_config.json"
     )
 
     ctx = Context(
@@ -66,7 +66,7 @@ async def main():
         [
             {
                 "role": "user",
-                "content": "https://raw.githubusercontent.com/modelcontextprotocol/servers/refs/heads/main/src/everart/Dockerfile 这里有什么",
+                "content": "查看APIG 的日志查 021742551572355250be397f7471b46f4e4192b19e4b2b2fb422b",
             }
         ],
     )

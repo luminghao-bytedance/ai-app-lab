@@ -13,7 +13,7 @@ from typing import AsyncIterable, Optional
 
 from agent.agent import Agent, SwitchAgent
 from jinja2 import Template
-from prompt.worker import DEFAULT_WORKER_PROMPT
+from demohouse.oncaller.backend.prompt.prompt import DEFAULT_WORKER_PROMPT
 from volcenginesdkarkruntime.types.chat import ChatCompletionChunk
 
 from arkitect.core.component.context.model import ContextInterruption, State
