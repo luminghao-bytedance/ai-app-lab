@@ -18,6 +18,8 @@ from arkitect.core.component.tool.mcp_client import MCPClient
 
 
 def build_mcp_clients_from_config(config_file: str) -> dict[str, MCPClient]:
+    # https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers#servername
+
     # check file exist
     if not os.path.exists(config_file):
         raise ValueError(f"Config file {config_file} does not exist")
@@ -27,8 +29,16 @@ def build_mcp_clients_from_config(config_file: str) -> dict[str, MCPClient]:
     mcp_servers_config = config.get("mcpServers", {})
     mcp_clients = {}
     for server_name in mcp_servers_config:
-        command = mcp_servers_config[server_name].get("command", "")
-        args = mcp_servers_config[server_name].get("args", [])
-        client = MCPClient(name=server_name, command=command, arguments=args)
+        command = mcp_servers_config[server_name].get("command", None)
+        args = mcp_servers_config[server_name].get("args", None)
+        env = mcp_servers_config[server_name].get("env", None)
+        server_url = mcp_servers_config[server_name].get("url", None)
+        client = MCPClient(
+            name=server_name,
+            command=command,
+            arguments=args,
+            env=env,
+            server_url=server_url,
+        )
         mcp_clients[server_name] = client
     return mcp_clients

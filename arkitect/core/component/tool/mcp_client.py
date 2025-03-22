@@ -17,8 +17,14 @@ import logging
 from contextlib import AsyncExitStack
 from typing import Any, Dict
 
-from mcp import ClientSession, StdioServerParameters, Tool, stdio_client
+from mcp import (
+    ClientSession,
+    StdioServerParameters,
+    Tool,
+    stdio_client,
+)
 from mcp.client.sse import sse_client
+from mcp.client.stdio import get_default_environment
 from volcenginesdkarkruntime.types.chat import ChatCompletionContentPartParam
 
 from arkitect.core.component.tool.utils import (
@@ -86,8 +92,11 @@ class MCPClient:
         if not (is_python or is_js or is_docker):
             raise ValueError("Command must be started by uvx, docker or npm.")
 
+        envs = get_default_environment()
+        if self.env is not None:
+            envs.update(self.env)
         server_params = StdioServerParameters(
-            command=self.command, args=self.arguments, env=self.env
+            command=self.command, args=self.arguments, env=envs
         )
 
         stdio_transport = await self.exit_stack.enter_async_context(
