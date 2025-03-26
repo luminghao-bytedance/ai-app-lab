@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import datetime
 import logging
 from contextlib import AsyncExitStack
 from typing import Any, Dict
 
+import anyio
 from mcp import (
     ClientSession,
     StdioServerParameters,
@@ -47,6 +49,7 @@ class MCPClient:
         headers: dict[str, str] | None = None,
         timeout: float = 30,
         sse_read_timeout: float = 60 * 5,
+        exit_stack: AsyncExitStack | None = None,
     ) -> None:
         self.command = command
         self.arguments = arguments
@@ -58,7 +61,7 @@ class MCPClient:
 
         # Initialize session and client objects
         self.session: ClientSession = None  # type: ignore
-        self.exit_stack = AsyncExitStack()
+        self.exit_stack = exit_stack if exit_stack is not None else AsyncExitStack()
         self.tools: Dict[str, Tool] = {}
         self._mcp_server_name: str = name
         self._chat_completion_tools: dict[str, ChatCompletionTool] = {}
@@ -148,7 +151,14 @@ class MCPClient:
 
     async def cleanup(self) -> None:
         """Clean up resources"""
-        await self.exit_stack.aclose()
+        try:
+            await self.exit_stack.aclose()
+        except asyncio.CancelledError as e:
+            logger.error("Error while closing exit stack: %s", e)
+            raise e
+        except BaseException as e:
+            logger.error("Error while closing exit stack: %s", e)
+            raise e
 
     async def list_mcp_tools(self, use_cache: bool = True) -> list[Tool]:
         if self.session is None:
