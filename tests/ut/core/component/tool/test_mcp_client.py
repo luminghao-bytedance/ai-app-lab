@@ -39,7 +39,7 @@ async def test_connect_to_stdio_client():
             "greeting": {"input": {"name": "John"}, "output": "Hello, John!"},
         },
     )
-    client.cleanup()
+    await client.cleanup()
 
 
 async def test_connect_to_sse_client():
@@ -67,7 +67,7 @@ async def test_connect_to_sse_client():
             "greeting": {"input": {"name": "John"}, "output": "Hello, John!"},
         },
     )
-    client.cleanup()
+    await client.cleanup()
     server_process.kill()
 
 

@@ -12,14 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from asyncio.log import logger
+from anyio.abc import Process
 import os
 import json
+import sys
+from mcp.client.stdio import get_default_environment
+
+import anyio
 from arkitect.core.component.tool.mcp_client import MCPClient
 
 
-def build_mcp_clients_from_config(config_file: str) -> dict[str, MCPClient]:
+def build_mcp_clients_from_config(config_file: str, **kwargs) -> dict[str, MCPClient]:
     # https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers#servername
-
     # check file exist
     if not os.path.exists(config_file):
         raise ValueError(f"Config file {config_file} does not exist")
@@ -33,12 +38,57 @@ def build_mcp_clients_from_config(config_file: str) -> dict[str, MCPClient]:
         args = mcp_servers_config[server_name].get("args", None)
         env = mcp_servers_config[server_name].get("env", None)
         server_url = mcp_servers_config[server_name].get("url", None)
-        client = MCPClient(
-            name=server_name,
-            command=command,
-            arguments=args,
-            env=env,
-            server_url=server_url,
-        )
+        port = mcp_servers_config[server_name].get("port", None)
+        if port is not None:
+            logger.info("Starting local SSE MCP server")
+            client = MCPClient(
+                name=server_name, server_url=f"http://localhost:{port}/sse", **kwargs
+            )
+        else:
+            logger.info("Starting server")
+            client = MCPClient(
+                name=server_name,
+                server_url=server_url,
+                command=command,
+                arguments=args,
+                env=env,
+                **kwargs,
+            )
         mcp_clients[server_name] = client
     return mcp_clients
+
+
+async def spawn_mcp_server_from_config(
+    config_file: str,
+) -> list[Process]:
+    # https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers#servername
+
+    # check file exist
+    if not os.path.exists(config_file):
+        raise ValueError(f"Config file {config_file} does not exist")
+
+    with open(config_file, "r") as f:
+        config = json.loads(f.read())
+    mcp_servers_config = config.get("mcpServers", {})
+    processes = []
+    for server_name in mcp_servers_config:
+        command = mcp_servers_config[server_name].get("command", None)
+        args = mcp_servers_config[server_name].get("args", None)
+        env = mcp_servers_config[server_name].get("env", None)
+        port = mcp_servers_config[server_name].get("port", None)
+        if port is not None:
+            logger.info("Starting local SSE MCP server")
+            env["PORT"] = str(port)
+            envs = get_default_environment()
+            if env is not None:
+                envs.update(env)
+            p = await anyio.open_process(
+                [command, *args, "--transport", "sse"],
+                env=envs,
+                stderr=sys.stderr,
+            )
+            processes.append(p)
+        else:
+            logger.info("No need to start server")
+
+    return processes

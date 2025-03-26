@@ -45,7 +45,7 @@ class MCPClient:
         server_url: str | None = None,
         env: dict[str, str] | None = None,
         headers: dict[str, str] | None = None,
-        timeout: float = 5,
+        timeout: float = 30,
         sse_read_timeout: float = 60 * 5,
     ) -> None:
         self.command = command
@@ -107,7 +107,7 @@ class MCPClient:
             ClientSession(
                 stdio_read,
                 stdio_write,
-                read_timeout_seconds=datetime.timedelta(seconds=10),
+                read_timeout_seconds=datetime.timedelta(seconds=self.timeout),
             )
         )
 
