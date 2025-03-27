@@ -161,6 +161,7 @@ class MCPClient:
             logger.error("Error while closing exit stack: %s", e)
             raise e
 
+    @task()
     async def list_mcp_tools(self, use_cache: bool = True) -> list[Tool]:
         if self.session is None:
             logger.warning("MCP client is not connected to server yet. Connecting...")
@@ -170,6 +171,7 @@ class MCPClient:
             self.tools = {t.name: t for t in response.tools}
         return list(self.tools.values())
 
+    @task()
     async def list_tools(self, use_cache: bool = True) -> list[ChatCompletionTool]:
         if self.session is None:
             logger.warning("MCP client is not connected to server yet. Connecting...")
@@ -198,6 +200,7 @@ class MCPClient:
         result = await self.session.call_tool(tool_name, parameters)
         return convert_to_chat_completion_content_part_param(result)
 
+    @task()
     async def get_tool(self, tool_name: str, use_cache: bool = True) -> Tool | None:
         if self.session is None:
             logger.warning("MCP client is not connected to server yet. Connecting...")
