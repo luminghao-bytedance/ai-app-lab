@@ -34,6 +34,7 @@ from arkitect.core.component.tool.utils import (
     mcp_to_chat_completion_tool,
 )
 from arkitect.types.llm.model import ChatCompletionTool
+from arkitect.telemetry.trace import task
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,7 @@ class MCPClient:
     def name(self) -> str:
         return self._mcp_server_name
 
+    @task()
     async def execute_tool(
         self,
         tool_name: str,
